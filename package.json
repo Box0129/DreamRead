@@ -1,6 +1,6 @@
 {
-  "name": "voicer",
-  "version": "1.0.0",
+  "name": "dreamread",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,11 +8,13 @@
     "postinstall": "node scripts/generate-icons.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
+    "package": "npm run build && node scripts/package.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.28",
     "@types/chrome": "^0.0.287",
+    "archiver": "^7.0.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
   }

@@ -1,8 +1,9 @@
 import { getSettings, saveSettings } from '../shared/storage';
-import { t } from '../shared/text-utils';
-import type { TTSEngine, UILanguage, VoicerSettings } from '../tts/types';
+import { resolveSpeechLanguage, t } from '../shared/text-utils';
+import type { DreamReadSettings, SpeechLanguage, TTSEngine, UILanguage } from '../tts/types';
 
 const engineEl = document.getElementById('engine') as HTMLSelectElement;
+const speechLanguageEl = document.getElementById('speechLanguage') as HTMLSelectElement;
 const voiceEl = document.getElementById('voice') as HTMLSelectElement;
 const rateEl = document.getElementById('rate') as HTMLInputElement;
 const rateValueEl = document.getElementById('rateValue') as HTMLOutputElement;
@@ -12,6 +13,7 @@ const statusEl = document.getElementById('status') as HTMLParagraphElement;
 
 function applyLabels(lang: UILanguage): void {
   (document.getElementById('label-engine') as HTMLElement).textContent = t(lang, 'engine');
+  (document.getElementById('label-speech-language') as HTMLElement).textContent = t(lang, 'speechLanguage');
   (document.getElementById('label-voice') as HTMLElement).textContent = t(lang, 'voice');
   (document.getElementById('label-rate') as HTMLElement).textContent = t(lang, 'speed');
   (document.getElementById('label-volume') as HTMLElement).textContent = t(lang, 'volume');
@@ -20,13 +22,13 @@ function applyLabels(lang: UILanguage): void {
   (document.getElementById('openOptions') as HTMLButtonElement).textContent = t(lang, 'openOptions');
   (document.getElementById('testVoice') as HTMLButtonElement).textContent = t(lang, 'testVoice');
   (document.getElementById('subtitle') as HTMLElement).textContent =
-    lang === 'zh-CN' ? '划词转语音' : 'Select text to speech';
+    lang === 'zh-CN' ? '划词朗读' : 'Select text to listen';
+  speechLanguageEl.options[0].textContent = t(lang, 'speechAuto');
 }
 
-async function loadVoices(settings: VoicerSettings): Promise<void> {
+async function loadVoices(settings: DreamReadSettings): Promise<void> {
   voiceEl.innerHTML = '';
-  const voices = speechSynthesis.getVoices();
-  if (voices.length === 0) {
+  if (speechSynthesis.getVoices().length === 0) {
     await new Promise<void>((resolve) => {
       speechSynthesis.onvoiceschanged = () => resolve();
       setTimeout(resolve, 300);
@@ -45,8 +47,9 @@ async function loadVoices(settings: VoicerSettings): Promise<void> {
   }
 }
 
-function bindForm(settings: VoicerSettings): void {
+function bindForm(settings: DreamReadSettings): void {
   engineEl.value = settings.engine;
+  speechLanguageEl.value = settings.speechLanguage;
   rateEl.value = String(settings.rate);
   rateValueEl.textContent = `${settings.rate.toFixed(1)}x`;
   volumeEl.value = String(settings.volume);
@@ -54,7 +57,7 @@ function bindForm(settings: VoicerSettings): void {
   applyLabels(settings.language);
 }
 
-async function persist(partial: Partial<VoicerSettings>): Promise<void> {
+async function persist(partial: Partial<DreamReadSettings>): Promise<void> {
   await saveSettings(partial);
   const settings = await getSettings();
   applyLabels(settings.language);
@@ -66,6 +69,10 @@ async function persist(partial: Partial<VoicerSettings>): Promise<void> {
 
 engineEl.addEventListener('change', () => {
   void persist({ engine: engineEl.value as TTSEngine });
+});
+
+speechLanguageEl.addEventListener('change', () => {
+  void persist({ speechLanguage: speechLanguageEl.value as SpeechLanguage });
 });
 
 voiceEl.addEventListener('change', () => {
@@ -93,14 +100,17 @@ document.getElementById('testVoice')?.addEventListener('click', async () => {
   const settings = await getSettings();
   const sample =
     settings.language === 'zh-CN'
-      ? '你好，这是 Voicer 语音试听。'
-      : 'Hello, this is a Voicer voice preview.';
+      ? '你好，这是 DreamRead 语音试听。'
+      : 'Hello, this is a DreamRead voice preview.';
+  const speechLang = resolveSpeechLanguage(sample, settings.speechLanguage);
   const utterance = new SpeechSynthesisUtterance(sample);
   utterance.rate = settings.rate;
   utterance.volume = settings.volume;
   utterance.pitch = settings.pitch;
-  utterance.lang = settings.language;
-  const voice = speechSynthesis.getVoices().find((v) => v.voiceURI === settings.voiceURI);
+  utterance.lang = speechLang;
+  const voice = speechSynthesis.getVoices().find(
+    (v) => v.voiceURI === settings.voiceURI && v.lang.startsWith(speechLang.slice(0, 2)),
+  ) ?? speechSynthesis.getVoices().find((v) => v.lang.startsWith(speechLang));
   if (voice) utterance.voice = voice;
   speechSynthesis.cancel();
   speechSynthesis.speak(utterance);

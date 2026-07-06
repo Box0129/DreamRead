@@ -54,7 +54,7 @@ async function handleStartRead(message: Extract<ExtensionMessage, { type: 'START
       return;
     }
     const messageText = error instanceof Error ? error.message : String(error);
-    console.error('[Voicer]', messageText);
+    console.error('[DreamRead]', messageText);
     destroyPlayer();
   }
 }

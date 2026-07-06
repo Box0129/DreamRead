@@ -3,7 +3,7 @@ import { splitTextIntoChunks, t } from '../shared/text-utils';
 import type { ExtensionMessage, SynthesizeResponse } from '../shared/messages';
 import { synthesizeRemote } from '../tts';
 
-const MENU_ID = 'voicer-read-this';
+const MENU_ID = 'dreamread-read-this';
 
 function setupContextMenu(): void {
   void getSettings().then((settings) => {

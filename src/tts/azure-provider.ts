@@ -1,4 +1,4 @@
-import type { TTSOptions, TTSProvider, TTSResult, VoicerSettings } from './types';
+import type { TTSOptions, TTSProvider, TTSResult, DreamReadSettings } from './types';
 
 function escapeSsml(text: string): string {
   return text
@@ -12,7 +12,7 @@ function escapeSsml(text: string): string {
 export async function synthesizeWithAzure(
   text: string,
   options: TTSOptions,
-  settings: VoicerSettings,
+  settings: DreamReadSettings,
 ): Promise<TTSResult> {
   const key = settings.azureKey.trim();
   const region = settings.azureRegion.trim();

@@ -1,5 +1,5 @@
-import type { VoicerSettings } from '../tts/types';
-import { splitTextIntoChunks } from '../shared/text-utils';
+import type { DreamReadSettings } from '../tts/types';
+import { splitByLanguage, splitTextIntoChunks } from '../shared/text-utils';
 
 export interface WebSpeechCallbacks {
   onStart?: () => void;
@@ -11,56 +11,83 @@ export interface WebSpeechCallbacks {
   onChunkChange?: (current: number, total: number) => void;
 }
 
-let utteranceQueue: SpeechSynthesisUtterance[] = [];
-let currentChunkIndex = 0;
-let totalChunks = 0;
+interface QueuedUtterance {
+  utterance: SpeechSynthesisUtterance;
+  length: number;
+}
+
+let utteranceQueue: QueuedUtterance[] = [];
+let currentIndex = 0;
+let totalItems = 0;
 let paused = false;
 let callbacks: WebSpeechCallbacks = {};
 
-function pickVoice(voiceURI: string, language: string): SpeechSynthesisVoice | undefined {
+function pickVoice(voiceURI: string, speechLang: string): SpeechSynthesisVoice | undefined {
   const voices = speechSynthesis.getVoices();
   if (voiceURI) {
     const matched = voices.find((v) => v.voiceURI === voiceURI || v.name === voiceURI);
-    if (matched) return matched;
+    if (matched && matched.lang.startsWith(speechLang.slice(0, 2))) return matched;
   }
   return (
-    voices.find((v) => v.lang.startsWith(language)) ??
-    voices.find((v) => v.lang.startsWith('zh')) ??
+    voices.find((v) => v.lang.startsWith(speechLang)) ??
+    voices.find((v) => v.lang.startsWith(speechLang.slice(0, 2))) ??
     voices[0]
   );
 }
 
-function speakChunk(text: string, settings: VoicerSettings): void {
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = settings.rate;
-  utterance.pitch = settings.pitch;
-  utterance.volume = settings.volume;
-  utterance.lang = settings.language;
+function buildQueue(text: string, settings: DreamReadSettings): QueuedUtterance[] {
+  const queue: QueuedUtterance[] = [];
+  const chunks = splitTextIntoChunks(text);
 
-  const voice = pickVoice(settings.voiceURI, settings.language);
-  if (voice) utterance.voice = voice;
+  for (const chunk of chunks) {
+    const segments =
+      settings.speechLanguage === 'auto'
+        ? splitByLanguage(chunk)
+        : [{ lang: settings.speechLanguage, text: chunk }];
 
-  const totalLength = text.length;
+    for (const segment of segments) {
+      const trimmed = segment.text.trim();
+      if (!trimmed) continue;
+
+      const utterance = new SpeechSynthesisUtterance(trimmed);
+      utterance.rate = settings.rate;
+      utterance.pitch = settings.pitch;
+      utterance.volume = settings.volume;
+      utterance.lang = segment.lang;
+
+      const voice = pickVoice(settings.voiceURI, segment.lang);
+      if (voice) utterance.voice = voice;
+
+      queue.push({ utterance, length: trimmed.length });
+    }
+  }
+
+  return queue;
+}
+
+function bindUtterance(item: QueuedUtterance, index: number): void {
+  const { utterance, length } = item;
 
   utterance.onstart = () => {
-    paused = false;
+    if (index === 0) paused = false;
     callbacks.onStart?.();
   };
 
   utterance.onboundary = (event) => {
-    callbacks.onBoundary?.(event.charIndex, event.charLength || 1, totalLength);
+    callbacks.onBoundary?.(event.charIndex, event.charLength || 1, length);
   };
 
   utterance.onend = () => {
-    currentChunkIndex += 1;
-    if (currentChunkIndex < utteranceQueue.length) {
-      callbacks.onChunkChange?.(currentChunkIndex + 1, totalChunks);
-      speechSynthesis.speak(utteranceQueue[currentChunkIndex]);
+    currentIndex += 1;
+    if (currentIndex < utteranceQueue.length) {
+      callbacks.onChunkChange?.(currentIndex + 1, totalItems);
+      speechSynthesis.speak(utteranceQueue[currentIndex].utterance);
       return;
     }
     utteranceQueue = [];
-    currentChunkIndex = 0;
-    totalChunks = 0;
+    currentIndex = 0;
+    totalItems = 0;
+    paused = false;
     callbacks.onEnd?.();
   };
 
@@ -68,55 +95,54 @@ function speakChunk(text: string, settings: VoicerSettings): void {
     if (event.error === 'interrupted' || event.error === 'canceled') return;
     callbacks.onError?.(event.error || 'speech synthesis error');
   };
-
-  utteranceQueue.push(utterance);
 }
 
 export function speakWithWebSpeech(
   text: string,
-  settings: VoicerSettings,
+  settings: DreamReadSettings,
   cb: WebSpeechCallbacks = {},
 ): void {
-  stopWebSpeech();
+  stopWebSpeech(false);
   callbacks = cb;
+  utteranceQueue = buildQueue(text, settings);
 
-  const chunks = splitTextIntoChunks(text);
-  if (chunks.length === 0) return;
+  if (utteranceQueue.length === 0) return;
 
-  totalChunks = chunks.length;
-  currentChunkIndex = 0;
-  utteranceQueue = [];
+  totalItems = utteranceQueue.length;
+  currentIndex = 0;
 
-  for (const chunk of chunks) {
-    speakChunk(chunk, settings);
-  }
-
-  callbacks.onChunkChange?.(1, totalChunks);
-  speechSynthesis.speak(utteranceQueue[0]);
+  utteranceQueue.forEach((item, index) => bindUtterance(item, index));
+  callbacks.onChunkChange?.(1, totalItems);
+  speechSynthesis.speak(utteranceQueue[0].utterance);
 }
 
-export function pauseWebSpeech(): void {
+export function pauseWebSpeech(): boolean {
   if (speechSynthesis.speaking && !speechSynthesis.paused) {
     speechSynthesis.pause();
     paused = true;
     callbacks.onPause?.();
+    return true;
   }
+  return false;
 }
 
-export function resumeWebSpeech(): void {
+export function resumeWebSpeech(): boolean {
   if (speechSynthesis.paused) {
     speechSynthesis.resume();
     paused = false;
     callbacks.onResume?.();
+    return true;
   }
+  return false;
 }
 
-export function stopWebSpeech(): void {
+export function stopWebSpeech(cancelCallbacks = true): void {
   speechSynthesis.cancel();
   utteranceQueue = [];
-  currentChunkIndex = 0;
-  totalChunks = 0;
+  currentIndex = 0;
+  totalItems = 0;
   paused = false;
+  if (cancelCallbacks) callbacks = {};
 }
 
 export function isWebSpeechPaused(): boolean {
@@ -127,15 +153,17 @@ export function isWebSpeechSpeaking(): boolean {
   return speechSynthesis.speaking;
 }
 
-export function getWebSpeechVoices(): SpeechSynthesisVoice[] {
-  return speechSynthesis.getVoices();
+export function canResumeWebSpeech(): boolean {
+  return isWebSpeechPaused() && utteranceQueue.length > 0;
+}
+
+export function hasWebSpeechQueue(): boolean {
+  return utteranceQueue.length > 0;
 }
 
 export function warmUpVoices(): void {
-  void getWebSpeechVoices();
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = () => getWebSpeechVoices();
-  }
+  void speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
 }
 
 warmUpVoices();

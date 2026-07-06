@@ -1,9 +1,9 @@
-import type { TTSOptions, TTSProvider, TTSResult, VoicerSettings } from './types';
+import type { TTSOptions, TTSProvider, TTSResult, DreamReadSettings } from './types';
 
 export async function synthesizeWithHttp(
   text: string,
   options: TTSOptions,
-  settings: VoicerSettings,
+  settings: DreamReadSettings,
 ): Promise<TTSResult> {
   const endpoint = settings.httpEndpoint.trim();
   if (!endpoint) {

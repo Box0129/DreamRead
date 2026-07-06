@@ -1,4 +1,4 @@
-import type { VoicerSettings } from '../tts/types';
+import type { DreamReadSettings } from '../tts/types';
 
 export type MessageType =
   | 'START_READ'
@@ -10,13 +10,13 @@ export type MessageType =
 export interface StartReadMessage {
   type: 'START_READ';
   text: string;
-  settings: VoicerSettings;
+  settings: DreamReadSettings;
 }
 
 export interface SynthesizeMessage {
   type: 'SYNTHESIZE';
   text: string;
-  settings: VoicerSettings;
+  settings: DreamReadSettings;
   requestId: string;
 }
 
@@ -25,7 +25,7 @@ export interface PlayBlobMessage {
   blobUrl: string;
   mimeType: string;
   text: string;
-  settings: VoicerSettings;
+  settings: DreamReadSettings;
   requestId: string;
   fallback?: boolean;
   error?: string;

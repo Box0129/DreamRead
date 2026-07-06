@@ -1,10 +1,10 @@
-import type { TTSOptions, TTSResult, VoicerSettings } from './types';
+import type { TTSOptions, TTSResult, DreamReadSettings } from './types';
 import { azureProvider } from './azure-provider';
 import { httpProvider } from './http-provider';
 
 export async function synthesizeRemote(
   text: string,
-  settings: VoicerSettings,
+  settings: DreamReadSettings,
   options?: Partial<TTSOptions>,
 ): Promise<TTSResult> {
   const ttsOptions: TTSOptions = {
