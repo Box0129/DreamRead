@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voicer Settings</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="options">
+      <header>
+        <h1>Voicer</h1>
+        <p id="subtitle">高级设置</p>
+      </header>
+
+      <section>
+        <h2 id="section-http">HTTP / ChatTTS</h2>
+        <label>
+          <span id="label-http-endpoint">HTTP TTS 端点</span>
+          <input id="httpEndpoint" type="url" placeholder="http://localhost:9966/tts" />
+        </label>
+        <p class="hint" id="httpHint">
+          对接自建 ChatTTS 服务，POST JSON: { text, voice, speed }
+        </p>
+      </section>
+
+      <section>
+        <h2 id="section-azure">Azure Speech</h2>
+        <label>
+          <span id="label-azure-key">Azure Speech Key</span>
+          <input id="azureKey" type="password" autocomplete="off" />
+        </label>
+        <label>
+          <span id="label-azure-region">Azure 区域</span>
+          <input id="azureRegion" type="text" placeholder="eastasia" />
+        </label>
+        <label>
+          <span id="label-azure-voice">Azure 音色</span>
+          <input id="azureVoice" type="text" placeholder="zh-CN-XiaoxiaoNeural" />
+        </label>
+      </section>
+
+      <section>
+        <h2 id="section-general">通用</h2>
+        <label class="checkbox">
+          <input id="fallbackToWebSpeech" type="checkbox" checked />
+          <span id="label-fallback">失败时降级到 Web Speech</span>
+        </label>
+        <p class="hint" id="shortcutHint">快捷键 Alt+R 朗读选区</p>
+      </section>
+
+      <div class="actions">
+        <button id="save" type="button">保存</button>
+      </div>
+      <p class="status" id="status"></p>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
