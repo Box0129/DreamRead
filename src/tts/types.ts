@@ -12,6 +12,8 @@ export interface DreamReadSettings {
   pitch: number;
   volume: number;
   voiceURI: string;
+  voiceURI_zh: string;
+  voiceURI_en: string;
   httpEndpoint: string;
   azureKey: string;
   azureRegion: string;
@@ -21,14 +23,19 @@ export interface DreamReadSettings {
   fallbackToWebSpeech: boolean;
   playerOpacity: number;
   playerTheme: PlayerTheme;
+  loopPlayback: boolean;
+  playerPosX: number;
+  playerPosY: number;
 }
 
 export const DEFAULT_SETTINGS: DreamReadSettings = {
   engine: 'web-speech',
   rate: 1.0,
-  pitch: 1.0,
+  pitch: 1.05,
   volume: 1.0,
   voiceURI: '',
+  voiceURI_zh: '',
+  voiceURI_en: '',
   httpEndpoint: 'http://localhost:9966/tts',
   azureKey: '',
   azureRegion: 'eastasia',
@@ -38,6 +45,9 @@ export const DEFAULT_SETTINGS: DreamReadSettings = {
   fallbackToWebSpeech: true,
   playerOpacity: 0.72,
   playerTheme: 'candy',
+  loopPlayback: false,
+  playerPosX: 50,
+  playerPosY: -1,
 };
 
 /** @deprecated Use DreamReadSettings */

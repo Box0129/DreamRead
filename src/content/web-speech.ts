@@ -1,5 +1,6 @@
 import type { DreamReadSettings } from '../tts/types';
 import { splitByLanguage, splitTextIntoChunks } from '../shared/text-utils';
+import { pickVoiceForLang, waitForVoices } from '../shared/voices';
 
 export interface WebSpeechCallbacks {
   onStart?: () => void;
@@ -17,45 +18,41 @@ interface QueuedUtterance {
 }
 
 let utteranceQueue: QueuedUtterance[] = [];
+let cachedVoices: SpeechSynthesisVoice[] = [];
 let currentIndex = 0;
 let totalItems = 0;
 let paused = false;
 let callbacks: WebSpeechCallbacks = {};
 
-function pickVoice(voiceURI: string, speechLang: string): SpeechSynthesisVoice | undefined {
-  const voices = speechSynthesis.getVoices();
-  if (voiceURI) {
-    const matched = voices.find((v) => v.voiceURI === voiceURI || v.name === voiceURI);
-    if (matched && matched.lang.startsWith(speechLang.slice(0, 2))) return matched;
+function preferredVoiceURI(settings: DreamReadSettings, lang: string): string {
+  if (lang.startsWith('zh')) {
+    return settings.voiceURI_zh || settings.voiceURI;
   }
-  return (
-    voices.find((v) => v.lang.startsWith(speechLang)) ??
-    voices.find((v) => v.lang.startsWith(speechLang.slice(0, 2))) ??
-    voices[0]
-  );
+  return settings.voiceURI_en || settings.voiceURI;
 }
 
-function buildQueue(text: string, settings: DreamReadSettings): QueuedUtterance[] {
+function buildQueue(text: string, settings: DreamReadSettings, voices: SpeechSynthesisVoice[]): QueuedUtterance[] {
   const queue: QueuedUtterance[] = [];
   const chunks = splitTextIntoChunks(text);
+  const speechRate = Math.min(1.15, Math.max(0.85, settings.rate));
 
   for (const chunk of chunks) {
     const segments =
       settings.speechLanguage === 'auto'
         ? splitByLanguage(chunk)
-        : [{ lang: settings.speechLanguage, text: chunk }];
+        : [{ lang: settings.speechLanguage as 'zh-CN' | 'en-US', text: chunk }];
 
     for (const segment of segments) {
       const trimmed = segment.text.trim();
       if (!trimmed) continue;
 
       const utterance = new SpeechSynthesisUtterance(trimmed);
-      utterance.rate = settings.rate;
+      utterance.rate = speechRate;
       utterance.pitch = settings.pitch;
       utterance.volume = settings.volume;
       utterance.lang = segment.lang;
 
-      const voice = pickVoice(settings.voiceURI, segment.lang);
+      const voice = pickVoiceForLang(voices, segment.lang, preferredVoiceURI(settings, segment.lang));
       if (voice) utterance.voice = voice;
 
       queue.push({ utterance, length: trimmed.length });
@@ -97,14 +94,15 @@ function bindUtterance(item: QueuedUtterance, index: number): void {
   };
 }
 
-export function speakWithWebSpeech(
+export async function speakWithWebSpeech(
   text: string,
   settings: DreamReadSettings,
   cb: WebSpeechCallbacks = {},
-): void {
+): Promise<void> {
   stopWebSpeech(false);
   callbacks = cb;
-  utteranceQueue = buildQueue(text, settings);
+  cachedVoices = await waitForVoices();
+  utteranceQueue = buildQueue(text, settings, cachedVoices);
 
   if (utteranceQueue.length === 0) return;
 
@@ -157,13 +155,19 @@ export function canResumeWebSpeech(): boolean {
   return isWebSpeechPaused() && utteranceQueue.length > 0;
 }
 
-export function hasWebSpeechQueue(): boolean {
-  return utteranceQueue.length > 0;
+export async function preloadVoices(): Promise<SpeechSynthesisVoice[]> {
+  cachedVoices = await waitForVoices();
+  return cachedVoices;
 }
 
-export function warmUpVoices(): void {
-  void speechSynthesis.getVoices();
-  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+export function getCachedVoices(): SpeechSynthesisVoice[] {
+  return cachedVoices.length > 0 ? cachedVoices : speechSynthesis.getVoices();
 }
 
 warmUpVoices();
+
+function warmUpVoices(): void {
+  void waitForVoices().then((voices) => {
+    cachedVoices = voices;
+  });
+}

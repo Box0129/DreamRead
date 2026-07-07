@@ -76,6 +76,12 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'OPEN_OPTIONS') {
+    chrome.runtime.openOptionsPage();
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (message?.type !== 'SYNTHESIZE') return false;
 
   void (async () => {

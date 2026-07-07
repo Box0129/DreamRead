@@ -7,6 +7,8 @@ const SYNC_KEYS: (keyof DreamReadSettings)[] = [
   'pitch',
   'volume',
   'voiceURI',
+  'voiceURI_zh',
+  'voiceURI_en',
   'httpEndpoint',
   'azureRegion',
   'azureVoice',
@@ -15,6 +17,9 @@ const SYNC_KEYS: (keyof DreamReadSettings)[] = [
   'fallbackToWebSpeech',
   'playerOpacity',
   'playerTheme',
+  'loopPlayback',
+  'playerPosX',
+  'playerPosY',
 ];
 
 const LOCAL_KEYS: (keyof DreamReadSettings)[] = ['azureKey'];
@@ -29,7 +34,16 @@ export async function getSettings(): Promise<DreamReadSettings> {
     ...DEFAULT_SETTINGS,
     ...(syncData as Partial<DreamReadSettings>),
     ...(localData as Partial<DreamReadSettings>),
+    ...migrateLegacyVoice(syncData as Partial<DreamReadSettings>),
   };
+}
+
+function migrateLegacyVoice(data: Partial<DreamReadSettings>): Partial<DreamReadSettings> {
+  if (!data.voiceURI) return {};
+  const patch: Partial<DreamReadSettings> = {};
+  if (!data.voiceURI_zh) patch.voiceURI_zh = data.voiceURI;
+  if (!data.voiceURI_en) patch.voiceURI_en = data.voiceURI;
+  return patch;
 }
 
 export async function saveSettings(partial: Partial<DreamReadSettings>): Promise<void> {

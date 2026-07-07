@@ -5,7 +5,8 @@ export type MessageType =
   | 'SYNTHESIZE'
   | 'PLAY_BLOB'
   | 'GET_SELECTION'
-  | 'STOP_READ';
+  | 'STOP_READ'
+  | 'OPEN_OPTIONS';
 
 export interface StartReadMessage {
   type: 'START_READ';
@@ -39,12 +40,17 @@ export interface StopReadMessage {
   type: 'STOP_READ';
 }
 
+export interface OpenOptionsMessage {
+  type: 'OPEN_OPTIONS';
+}
+
 export type ExtensionMessage =
   | StartReadMessage
   | SynthesizeMessage
   | PlayBlobMessage
   | GetSelectionMessage
-  | StopReadMessage;
+  | StopReadMessage
+  | OpenOptionsMessage;
 
 export interface SynthesizeResponse {
   ok: boolean;
