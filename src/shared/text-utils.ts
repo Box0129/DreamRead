@@ -11,6 +11,24 @@ export function normalizeText(text: string): string {
     .trim();
 }
 
+/** Strip punctuation so TTS engines won't speak symbols aloud. */
+export function prepareTextForSpeech(text: string): string {
+  let cleaned = text.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+
+  cleaned = cleaned
+    .replace(/[\u3000-\u303f\uff00-\uffef]/g, ' ')
+    .replace(/[\u2000-\u206f\u2e00-\u2e7f]/g, ' ')
+    .replace(/[\u00a0-\u00bf]/g, ' ');
+
+  cleaned = cleaned.replace(/[^\w\s\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g, ' ');
+
+  return normalizeText(cleaned);
+}
+
+export function isSpeechReadyText(text: string): boolean {
+  return /[\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/.test(text);
+}
+
 export function isCjkChar(char: string): boolean {
   return CJK_RE.test(char);
 }
@@ -25,38 +43,62 @@ export function detectDominantLanguage(text: string): 'zh-CN' | 'en-US' {
   return cjk >= latin ? 'zh-CN' : 'en-US';
 }
 
+type SegmentLang = 'zh-CN' | 'en-US';
+
+function classifyChar(ch: string): SegmentLang | 'neutral' {
+  if (/\s/.test(ch)) return 'neutral';
+  if (isCjkChar(ch)) return 'zh-CN';
+  if (/[A-Za-z]/.test(ch)) return 'en-US';
+  if (/\d/.test(ch)) return 'neutral';
+  return 'neutral';
+}
+
 /** Split text into homogeneous zh/en segments so TTS won't mix accents. */
 export function splitByLanguage(text: string): LanguageSegment[] {
-  const normalized = normalizeText(text);
+  const normalized = prepareTextForSpeech(text);
   if (!normalized) return [];
 
   const segments: LanguageSegment[] = [];
   let buffer = '';
-  let bufferLang: 'zh-CN' | 'en-US' | null = null;
+  let bufferLang: SegmentLang | null = null;
+
+  const flush = (): void => {
+    const trimmed = buffer.trim();
+    if (trimmed && bufferLang) segments.push({ lang: bufferLang, text: trimmed });
+    buffer = '';
+    bufferLang = null;
+  };
 
   for (const ch of normalized) {
-    const lang: 'zh-CN' | 'en-US' = isCjkChar(ch) ? 'zh-CN' : 'en-US';
-    if (bufferLang === null) {
-      bufferLang = lang;
-      buffer = ch;
+    const kind = classifyChar(ch);
+
+    if (kind === 'neutral') {
+      buffer += /\s/.test(ch) ? ' ' : ch;
       continue;
     }
-    if (lang === bufferLang) {
+
+    if (bufferLang === null) {
+      bufferLang = kind;
       buffer += ch;
       continue;
     }
-    const trimmed = buffer.trim();
-    if (trimmed) segments.push({ lang: bufferLang, text: trimmed });
-    bufferLang = lang;
+
+    if (kind === bufferLang) {
+      buffer += ch;
+      continue;
+    }
+
+    flush();
+    bufferLang = kind;
     buffer = ch;
   }
 
-  const trimmed = buffer.trim();
-  if (trimmed && bufferLang) {
-    segments.push({ lang: bufferLang, text: trimmed });
-  }
+  flush();
 
-  return segments.length > 0 ? segments : [{ lang: detectDominantLanguage(normalized), text: normalized }];
+  if (segments.length > 0) return segments;
+
+  const fallbackLang = detectDominantLanguage(normalized);
+  return normalized ? [{ lang: fallbackLang, text: normalized }] : [];
 }
 
 export function resolveSpeechLanguage(
@@ -68,7 +110,7 @@ export function resolveSpeechLanguage(
 }
 
 export function splitTextIntoChunks(text: string, maxLength = MAX_CHUNK_LENGTH): string[] {
-  const normalized = normalizeText(text);
+  const normalized = prepareTextForSpeech(text);
   if (normalized.length <= maxLength) {
     return normalized ? [normalized] : [];
   }

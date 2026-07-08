@@ -1,5 +1,5 @@
 import { getSettings, onSettingsChanged } from '../shared/storage';
-import { splitTextIntoChunks, t } from '../shared/text-utils';
+import { splitTextIntoChunks, prepareTextForSpeech, isSpeechReadyText, t } from '../shared/text-utils';
 import type { ExtensionMessage, SynthesizeResponse } from '../shared/messages';
 import { synthesizeRemote } from '../tts';
 
@@ -26,7 +26,10 @@ async function sendToTab<T = unknown>(
 
 async function startReading(tabId: number, text: string): Promise<void> {
   const settings = await getSettings();
-  const chunks = splitTextIntoChunks(text);
+  const speechText = prepareTextForSpeech(text);
+  if (!isSpeechReadyText(speechText)) return;
+
+  const chunks = splitTextIntoChunks(speechText);
   if (chunks.length === 0) return;
 
   await sendToTab(tabId, {

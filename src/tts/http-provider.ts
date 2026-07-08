@@ -1,4 +1,5 @@
 import type { TTSOptions, TTSProvider, TTSResult, DreamReadSettings } from './types';
+import { prepareTextForSpeech } from '../shared/text-utils';
 
 export async function synthesizeWithHttp(
   text: string,
@@ -21,7 +22,7 @@ export async function synthesizeWithHttp(
         Accept: 'audio/*',
       },
       body: JSON.stringify({
-        text,
+        text: prepareTextForSpeech(text),
         voice: settings.voiceURI || 'default',
         speed: options.rate,
         pitch: options.pitch,

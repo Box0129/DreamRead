@@ -1,5 +1,5 @@
 import { getSettings, saveSettings } from '../shared/storage';
-import { resolveSpeechLanguage, t } from '../shared/text-utils';
+import { resolveSpeechLanguage, prepareTextForSpeech, t } from '../shared/text-utils';
 import {
   defaultVoiceURI,
   filterVoicesByLang,
@@ -119,10 +119,11 @@ document.getElementById('openOptions')?.addEventListener('click', () => {
 
 document.getElementById('testVoice')?.addEventListener('click', async () => {
   const settings = await getSettings();
-  const sample =
+  const sample = prepareTextForSpeech(
     settings.language === 'zh-CN'
       ? '你好，这是 DreamRead 语音试听。'
-      : 'Hello, this is a DreamRead voice preview.';
+      : 'Hello, this is a DreamRead voice preview.',
+  );
   const speechLang = resolveSpeechLanguage(sample, settings.speechLanguage);
   const voices = await waitForVoices();
   const utterance = new SpeechSynthesisUtterance(sample);

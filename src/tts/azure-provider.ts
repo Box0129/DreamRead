@@ -1,4 +1,5 @@
 import type { TTSOptions, TTSProvider, TTSResult, DreamReadSettings } from './types';
+import { prepareTextForSpeech } from '../shared/text-utils';
 
 function escapeSsml(text: string): string {
   return text
@@ -26,7 +27,7 @@ export async function synthesizeWithAzure(
   const pitchPercent = Math.round((options.pitch - 1) * 50);
   const pitchStr = pitchPercent >= 0 ? `+${pitchPercent}%` : `${pitchPercent}%`;
 
-  const ssml = `<speak version="1.0" xml:lang="zh-CN"><voice name="${voice}"><prosody rate="${rateStr}" pitch="${pitchStr}">${escapeSsml(text)}</prosody></voice></speak>`;
+  const ssml = `<speak version="1.0" xml:lang="zh-CN"><voice name="${voice}"><prosody rate="${rateStr}" pitch="${pitchStr}">${escapeSsml(prepareTextForSpeech(text))}</prosody></voice></speak>`;
 
   const endpoint = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
 

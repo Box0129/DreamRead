@@ -1,6 +1,6 @@
 import type { ExtensionMessage } from '../shared/messages';
 import { getSettings } from '../shared/storage';
-import { t } from '../shared/text-utils';
+import { isSpeechReadyText, prepareTextForSpeech, t } from '../shared/text-utils';
 import {
   destroyPlayer,
   playBlob,
@@ -10,8 +10,9 @@ import {
 } from './player';
 
 async function handleStartRead(message: Extract<ExtensionMessage, { type: 'START_READ' }>): Promise<void> {
-  const { text, settings } = message;
-  if (!text.trim()) return;
+  const { settings } = message;
+  const text = prepareTextForSpeech(message.text);
+  if (!isSpeechReadyText(text)) return;
 
   stopAll();
 
