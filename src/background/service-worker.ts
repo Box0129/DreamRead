@@ -1,9 +1,12 @@
 import { getSettings, onSettingsChanged } from '../shared/storage';
-import { splitTextIntoChunks, prepareTextForSpeech, isSpeechReadyText, t } from '../shared/text-utils';
+import { splitTextIntoChunks, normalizeInputText, isSpeechReadyText, t } from '../shared/text-utils';
 import type { ExtensionMessage, SynthesizeResponse } from '../shared/messages';
 import { synthesizeRemote } from '../tts';
 
 const MENU_ID = 'dreamread-read-this';
+
+const RESTRICTED_URL_RE =
+  /^(chrome:|chrome-extension:|edge:|about:|devtools:|view-source:|https:\/\/chrome\.google\.com\/webstore)/i;
 
 function setupContextMenu(): void {
   void getSettings().then((settings) => {
@@ -17,19 +20,67 @@ function setupContextMenu(): void {
   });
 }
 
+async function isInjectableTab(tabId: number): Promise<boolean> {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const url = tab.url ?? tab.pendingUrl ?? '';
+    return Boolean(url) && !RESTRICTED_URL_RE.test(url);
+  } catch {
+    return false;
+  }
+}
+
+function getContentScriptFiles(): string[] {
+  const entry = chrome.runtime.getManifest().content_scripts?.[0];
+  return entry?.js ? [...entry.js] : [];
+}
+
+async function pingContentScript(tabId: number): Promise<boolean> {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+    return response?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureContentScript(tabId: number): Promise<void> {
+  if (await pingContentScript(tabId)) return;
+
+  const files = getContentScriptFiles();
+  if (files.length === 0) {
+    throw new Error('DreamRead content script is not configured');
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files,
+  });
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (await pingContentScript(tabId)) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  throw new Error('DreamRead failed to connect to this page. Try refreshing the tab.');
+}
+
 async function sendToTab<T = unknown>(
   tabId: number,
   message: ExtensionMessage,
 ): Promise<T | undefined> {
-  return chrome.tabs.sendMessage(tabId, message);
+  await ensureContentScript(tabId);
+  return chrome.tabs.sendMessage(tabId, message) as Promise<T | undefined>;
 }
 
 async function startReading(tabId: number, text: string): Promise<void> {
-  const settings = await getSettings();
-  const speechText = prepareTextForSpeech(text);
-  if (!isSpeechReadyText(speechText)) return;
+  if (!(await isInjectableTab(tabId))) return;
 
-  const chunks = splitTextIntoChunks(speechText);
+  const settings = await getSettings();
+  const normalized = normalizeInputText(text);
+  if (!isSpeechReadyText(normalized)) return;
+
+  const chunks = splitTextIntoChunks(normalized);
   if (chunks.length === 0) return;
 
   await sendToTab(tabId, {
@@ -40,6 +91,8 @@ async function startReading(tabId: number, text: string): Promise<void> {
 }
 
 async function readSelectionFromTab(tabId: number): Promise<void> {
+  if (!(await isInjectableTab(tabId))) return;
+
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
     func: () => window.getSelection()?.toString() ?? '',
@@ -48,6 +101,12 @@ async function readSelectionFromTab(tabId: number): Promise<void> {
   const text = typeof result === 'string' ? result.trim() : '';
   if (!text) return;
   await startReading(tabId, text);
+}
+
+function runSafely(task: () => Promise<void>): void {
+  void task().catch((error) => {
+    console.warn('[DreamRead]', error instanceof Error ? error.message : error);
+  });
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -64,18 +123,20 @@ onSettingsChanged((settings) => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== MENU_ID || !tab?.id) return;
   const text = info.selectionText?.trim();
   if (!text) return;
-  await startReading(tab.id, text);
+  runSafely(() => startReading(tab.id!, text));
 });
 
-chrome.commands.onCommand.addListener(async (command) => {
+chrome.commands.onCommand.addListener((command) => {
   if (command !== 'read-selection') return;
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return;
-  await readSelectionFromTab(tab.id);
+  runSafely(async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    await readSelectionFromTab(tab.id);
+  });
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

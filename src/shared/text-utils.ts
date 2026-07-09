@@ -4,11 +4,66 @@ const MAX_CHUNK_LENGTH = 5000;
 
 const CJK_RE = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
 
+export interface SpeechUnit {
+  text: string;
+  pauseAfterMs: number;
+}
+
+export const SPEECH_PAUSE = {
+  sentence: 550,
+  clause: 280,
+  phrase: 150,
+  paragraph: 800,
+  none: 0,
+} as const;
+
+type SpeechLang = 'zh-CN' | 'en-US';
+
+const ZH_MAX_CHARS = 12;
+const ZH_MIN_CHARS = 4;
+const EN_MAX_WORDS = 10;
+const EN_MIN_WORDS = 3;
+const MAX_PHRASE_SPLITS = 3;
+
+const ZH_BREAK_AFTER = ['以及', '并且', '但是', '所以', '因为', '如果', '虽然', '而且', '或者', '与', '和'];
+const ZH_BREAK_SINGLE = '的了吗呢吧啊';
+
+const EN_BREAK_WORDS = new Set([
+  'and',
+  'but',
+  'or',
+  'which',
+  'that',
+  'because',
+  'when',
+  'if',
+  'while',
+  'though',
+  'although',
+  'with',
+  'for',
+  'from',
+  'after',
+  'before',
+  'until',
+  'since',
+  'as',
+]);
+
+const EN_ABBREV = /^(Mr|Mrs|Ms|Dr|Prof|Jr|Sr|St|vs|etc|eg|ie|Inc|Ltd|Co)$/i;
+
 export function normalizeText(text: string): string {
   return text
     .replace(/\s+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+export function normalizeInputText(text: string): string {
+  const withAsciiDigits = text.replace(/[０-９]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xfee0),
+  );
+  return normalizeText(withAsciiDigits);
 }
 
 /** Strip punctuation so TTS engines won't speak symbols aloud. */
@@ -23,6 +78,303 @@ export function prepareTextForSpeech(text: string): string {
   cleaned = cleaned.replace(/[^\w\s\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g, ' ');
 
   return normalizeText(cleaned);
+}
+
+function isSentenceDelimiter(ch: string): boolean {
+  return /[。！？!?]/.test(ch);
+}
+
+function isClauseDelimiter(ch: string): boolean {
+  return /[，、；;：:]/.test(ch) || /[,;]/.test(ch);
+}
+
+function isSkippablePunctuation(ch: string): boolean {
+  return /[^\w\s\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\d.]/.test(ch);
+}
+
+function nextNonSpace(text: string, index: number): string {
+  for (let i = index + 1; i < text.length; i++) {
+    if (!/\s/.test(text[i])) return text[i];
+  }
+  return '';
+}
+
+function wordBeforePeriod(text: string, index: number): string {
+  let end = index - 1;
+  while (end >= 0 && /\s/.test(text[end])) end -= 1;
+  let start = end;
+  while (start >= 0 && /[A-Za-z]/.test(text[start])) start -= 1;
+  return text.slice(start + 1, end + 1);
+}
+
+/** Treat `.` as sentence end unless it looks like a decimal, abbreviation, or initialism. */
+function isEnglishSentencePeriod(text: string, index: number): boolean {
+  if (text[index] !== '.') return false;
+
+  const prev = text[index - 1] ?? '';
+  const next = nextNonSpace(text, index);
+
+  if (/\d/.test(prev) && /\d/.test(next)) return false;
+
+  const word = wordBeforePeriod(text, index);
+  if (word && EN_ABBREV.test(word)) return false;
+  if (word.length === 1 && /[A-Z]/.test(word)) return false;
+  if (/\d/.test(prev) && /[A-Za-z\u4e00-\u9fff]/.test(next)) return false;
+
+  if (!next) return true;
+
+  const hasSpaceAfter = /\s/.test(text[index + 1] ?? '');
+  if (hasSpaceAfter && /[A-Za-z\u4e00-\u9fff0-9"']/.test(next)) return true;
+
+  if (/[\n\r]/.test(text[index + 1] ?? '')) return true;
+
+  return false;
+}
+
+function isEnglishListPeriod(text: string, index: number): boolean {
+  if (text[index] !== '.') return false;
+  const prev = text[index - 1] ?? '';
+  const next = nextNonSpace(text, index);
+  return /\d/.test(prev) && /[A-Za-z\u4e00-\u9fff]/.test(next);
+}
+
+interface RawSpeechUnit {
+  text: string;
+  pauseAfterMs: number;
+}
+
+function splitByPunctuation(text: string): RawSpeechUnit[] {
+  const units: RawSpeechUnit[] = [];
+  let buffer = '';
+
+  const push = (pauseAfterMs: number): void => {
+    if (buffer.trim()) units.push({ text: buffer, pauseAfterMs });
+    buffer = '';
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (ch === '\n') {
+      if (text[i + 1] === '\n') {
+        push(SPEECH_PAUSE.paragraph);
+        i += 1;
+        continue;
+      }
+      push(SPEECH_PAUSE.clause);
+      continue;
+    }
+
+    if (ch === '.') {
+      if (isEnglishSentencePeriod(text, i)) {
+        push(SPEECH_PAUSE.sentence);
+      } else if (isEnglishListPeriod(text, i)) {
+        push(SPEECH_PAUSE.clause);
+      }
+      continue;
+    }
+
+    if (isSentenceDelimiter(ch)) {
+      push(SPEECH_PAUSE.sentence);
+      continue;
+    }
+
+    if (isClauseDelimiter(ch)) {
+      push(SPEECH_PAUSE.clause);
+      continue;
+    }
+
+    if (isSkippablePunctuation(ch)) {
+      continue;
+    }
+
+    buffer += ch;
+  }
+
+  if (buffer.trim()) {
+    push(SPEECH_PAUSE.none);
+  }
+
+  return units;
+}
+
+function countEnglishWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+function unitLength(text: string, lang: SpeechLang): number {
+  return lang === 'zh-CN' ? text.length : countEnglishWords(text);
+}
+
+function isUnitTooShort(text: string, lang: SpeechLang): boolean {
+  return unitLength(text, lang) < (lang === 'zh-CN' ? ZH_MIN_CHARS : EN_MIN_WORDS);
+}
+
+function isUnitTooLong(text: string, lang: SpeechLang): boolean {
+  return unitLength(text, lang) > (lang === 'zh-CN' ? ZH_MAX_CHARS : EN_MAX_WORDS);
+}
+
+function findChinesePhraseBreak(text: string, start: number, maxEnd: number): number {
+  let best = -1;
+
+  for (const token of ZH_BREAK_AFTER) {
+    const idx = text.indexOf(token, start);
+    if (idx >= 0 && idx + token.length <= maxEnd) {
+      best = Math.max(best, idx + token.length);
+    }
+  }
+
+  for (let i = start; i < maxEnd; i++) {
+    if (ZH_BREAK_SINGLE.includes(text[i])) {
+      best = Math.max(best, i + 1);
+    }
+  }
+
+  return best > start ? best : -1;
+}
+
+function splitChinesePhrases(text: string, _finalPause: number): string[] {
+  if (!isUnitTooLong(text, 'zh-CN')) return [text];
+
+  const parts: string[] = [];
+  let start = 0;
+  let splits = 0;
+
+  while (start < text.length && splits < MAX_PHRASE_SPLITS) {
+    const remaining = text.length - start;
+    if (remaining <= ZH_MAX_CHARS) break;
+
+    const maxEnd = Math.min(start + ZH_MAX_CHARS, text.length);
+    let breakAt = findChinesePhraseBreak(text, start, maxEnd);
+    if (breakAt < 0) breakAt = maxEnd;
+
+    const piece = text.slice(start, breakAt).trim();
+    if (piece) parts.push(piece);
+    start = breakAt;
+    splits += 1;
+  }
+
+  const tail = text.slice(start).trim();
+  if (tail) parts.push(tail);
+
+  if (parts.length <= 1) return [text];
+
+  const merged: string[] = [];
+  for (const part of parts) {
+    if (merged.length > 0 && isUnitTooShort(part, 'zh-CN')) {
+      merged[merged.length - 1] += part;
+    } else {
+      merged.push(part);
+    }
+  }
+
+  if (merged.length <= 1) return [text];
+  return merged;
+}
+
+function splitEnglishPhrases(text: string, _finalPause: number): string[] {
+  if (!isUnitTooLong(text, 'en-US')) return [text];
+
+  const words = text.trim().split(/\s+/);
+  if (words.length <= EN_MAX_WORDS) return [text];
+
+  const parts: string[] = [];
+  let bucket: string[] = [];
+  let splits = 0;
+
+  const flush = (): void => {
+    if (bucket.length > 0) {
+      parts.push(bucket.join(' '));
+      bucket = [];
+    }
+  };
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const lower = word.toLowerCase();
+
+    if (
+      bucket.length >= EN_MAX_WORDS ||
+      (bucket.length >= EN_MIN_WORDS && EN_BREAK_WORDS.has(lower) && splits < MAX_PHRASE_SPLITS)
+    ) {
+      flush();
+      splits += 1;
+    }
+
+    bucket.push(word);
+  }
+
+  flush();
+
+  if (parts.length <= 1) return [text];
+
+  const merged: string[] = [];
+  for (const part of parts) {
+    if (merged.length > 0 && isUnitTooShort(part, 'en-US')) {
+      merged[merged.length - 1] = `${merged[merged.length - 1]} ${part}`;
+    } else {
+      merged.push(part);
+    }
+  }
+
+  if (merged.length <= 1) return [text];
+  return merged;
+}
+
+function splitLongIntoPhrases(text: string, finalPause: number, lang: SpeechLang): SpeechUnit[] {
+  const pieces = lang === 'zh-CN' ? splitChinesePhrases(text, finalPause) : splitEnglishPhrases(text, finalPause);
+
+  if (pieces.length === 1) {
+    return [{ text: pieces[0], pauseAfterMs: finalPause }];
+  }
+
+  return pieces.map((piece, index) => ({
+    text: piece,
+    pauseAfterMs: index < pieces.length - 1 ? SPEECH_PAUSE.phrase : finalPause,
+  }));
+}
+
+/** Split into short units with pause metadata for natural rhythm. */
+export function splitIntoSpeechUnits(
+  text: string,
+  lang: SpeechLang = detectDominantLanguage(text),
+): SpeechUnit[] {
+  const normalized = normalizeInputText(text);
+  const rawUnits = splitByPunctuation(normalized);
+  const result: SpeechUnit[] = [];
+  const speechLang = normalizeSpeechLang(lang);
+
+  for (const raw of rawUnits) {
+    const spoken = prepareTextForSpeech(raw.text);
+    if (!spoken || !isSpeechReadyText(spoken)) continue;
+
+    result.push(...splitLongIntoPhrases(spoken, raw.pauseAfterMs, speechLang));
+  }
+
+  return result;
+}
+
+export function buildHttpSpeechText(
+  text: string,
+  lang: SpeechLang = detectDominantLanguage(text),
+): string {
+  const speechLang = normalizeSpeechLang(lang);
+  const parts: string[] = [];
+  for (const unit of splitIntoSpeechUnits(text, speechLang)) {
+    parts.push(unit.text);
+    if (unit.pauseAfterMs >= SPEECH_PAUSE.paragraph) {
+      parts.push('\n\n');
+    } else if (unit.pauseAfterMs >= SPEECH_PAUSE.sentence) {
+      parts.push('\n');
+    } else if (unit.pauseAfterMs >= SPEECH_PAUSE.clause) {
+      parts.push('  ');
+    } else if (unit.pauseAfterMs >= SPEECH_PAUSE.phrase) {
+      parts.push(' ');
+    }
+  }
+  return parts.join('').trim();
 }
 
 export function isSpeechReadyText(text: string): boolean {
@@ -47,6 +399,7 @@ type SegmentLang = 'zh-CN' | 'en-US';
 
 function classifyChar(ch: string): SegmentLang | 'neutral' {
   if (/\s/.test(ch)) return 'neutral';
+  if (isSkippablePunctuation(ch) || isSentenceDelimiter(ch) || isClauseDelimiter(ch)) return 'neutral';
   if (isCjkChar(ch)) return 'zh-CN';
   if (/[A-Za-z]/.test(ch)) return 'en-US';
   if (/\d/.test(ch)) return 'neutral';
@@ -55,7 +408,7 @@ function classifyChar(ch: string): SegmentLang | 'neutral' {
 
 /** Split text into homogeneous zh/en segments so TTS won't mix accents. */
 export function splitByLanguage(text: string): LanguageSegment[] {
-  const normalized = prepareTextForSpeech(text);
+  const normalized = normalizeInputText(text);
   if (!normalized) return [];
 
   const segments: LanguageSegment[] = [];
@@ -103,14 +456,18 @@ export function splitByLanguage(text: string): LanguageSegment[] {
 
 export function resolveSpeechLanguage(
   text: string,
-  preference: 'auto' | 'zh-CN' | 'en-US',
+  preference: 'auto' | 'zh-CN' | 'en-US' = 'auto',
 ): 'zh-CN' | 'en-US' {
-  if (preference !== 'auto') return preference;
+  if (preference === 'zh-CN' || preference === 'en-US') return preference;
   return detectDominantLanguage(text);
 }
 
+function normalizeSpeechLang(lang: SpeechLang | string | undefined): SpeechLang {
+  return lang === 'en-US' ? 'en-US' : 'zh-CN';
+}
+
 export function splitTextIntoChunks(text: string, maxLength = MAX_CHUNK_LENGTH): string[] {
-  const normalized = prepareTextForSpeech(text);
+  const normalized = normalizeInputText(text);
   if (normalized.length <= maxLength) {
     return normalized ? [normalized] : [];
   }

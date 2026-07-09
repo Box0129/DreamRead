@@ -1,6 +1,6 @@
 import type { ExtensionMessage } from '../shared/messages';
 import { getSettings } from '../shared/storage';
-import { isSpeechReadyText, prepareTextForSpeech, t } from '../shared/text-utils';
+import { isSpeechReadyText, normalizeInputText, t } from '../shared/text-utils';
 import {
   destroyPlayer,
   playBlob,
@@ -11,7 +11,7 @@ import {
 
 async function handleStartRead(message: Extract<ExtensionMessage, { type: 'START_READ' }>): Promise<void> {
   const { settings } = message;
-  const text = prepareTextForSpeech(message.text);
+  const text = normalizeInputText(message.text);
   if (!isSpeechReadyText(text)) return;
 
   stopAll();
@@ -61,6 +61,11 @@ async function handleStartRead(message: Extract<ExtensionMessage, { type: 'START
 }
 
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
+  if (message.type === 'PING') {
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (message.type === 'START_READ') {
     void handleStartRead(message).then(() => sendResponse({ ok: true }));
     return true;

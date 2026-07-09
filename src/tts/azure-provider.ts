@@ -1,5 +1,5 @@
 import type { TTSOptions, TTSProvider, TTSResult, DreamReadSettings } from './types';
-import { prepareTextForSpeech } from '../shared/text-utils';
+import { resolveSpeechLanguage, splitIntoSpeechUnits } from '../shared/text-utils';
 
 function escapeSsml(text: string): string {
   return text
@@ -8,6 +8,25 @@ function escapeSsml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+function buildSsmlBody(
+  text: string,
+  rateStr: string,
+  pitchStr: string,
+  lang: 'zh-CN' | 'en-US',
+): string {
+  const units = splitIntoSpeechUnits(text, lang);
+  if (units.length === 0) return '';
+
+  let body = '';
+  for (let i = 0; i < units.length; i++) {
+    body += escapeSsml(units[i].text);
+    if (units[i].pauseAfterMs > 0 && i < units.length - 1) {
+      body += `<break time="${units[i].pauseAfterMs}ms"/>`;
+    }
+  }
+  return `<prosody rate="${rateStr}" pitch="${pitchStr}">${body}</prosody>`;
 }
 
 export async function synthesizeWithAzure(
@@ -27,7 +46,9 @@ export async function synthesizeWithAzure(
   const pitchPercent = Math.round((options.pitch - 1) * 50);
   const pitchStr = pitchPercent >= 0 ? `+${pitchPercent}%` : `${pitchPercent}%`;
 
-  const ssml = `<speak version="1.0" xml:lang="zh-CN"><voice name="${voice}"><prosody rate="${rateStr}" pitch="${pitchStr}">${escapeSsml(prepareTextForSpeech(text))}</prosody></voice></speak>`;
+  const lang = resolveSpeechLanguage(text, settings.speechLanguage);
+  const prosody = buildSsmlBody(text, rateStr, pitchStr, lang);
+  const ssml = `<speak version="1.0" xml:lang="${lang}"><voice name="${voice}">${prosody}</voice></speak>`;
 
   const endpoint = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
 

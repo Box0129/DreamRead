@@ -6,7 +6,12 @@ export type MessageType =
   | 'PLAY_BLOB'
   | 'GET_SELECTION'
   | 'STOP_READ'
-  | 'OPEN_OPTIONS';
+  | 'OPEN_OPTIONS'
+  | 'PING';
+
+export interface PingMessage {
+  type: 'PING';
+}
 
 export interface StartReadMessage {
   type: 'START_READ';
@@ -50,7 +55,8 @@ export type ExtensionMessage =
   | PlayBlobMessage
   | GetSelectionMessage
   | StopReadMessage
-  | OpenOptionsMessage;
+  | OpenOptionsMessage
+  | PingMessage;
 
 export interface SynthesizeResponse {
   ok: boolean;
