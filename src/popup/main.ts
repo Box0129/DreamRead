@@ -33,6 +33,7 @@ function applyLabels(lang: UILanguage): void {
   (document.getElementById('label-rate') as HTMLElement).textContent = t(lang, 'speed');
   (document.getElementById('label-volume') as HTMLElement).textContent = t(lang, 'volume');
   (document.getElementById('label-language') as HTMLElement).textContent = t(lang, 'language');
+  (document.getElementById('quickSettings') as HTMLElement).textContent = t(lang, 'settings');
   (document.getElementById('shortcutHint') as HTMLElement).textContent = t(lang, 'shortcut');
   (document.getElementById('voiceHint') as HTMLElement).textContent = t(lang, 'voiceNaturalHint');
   (document.getElementById('openOptions') as HTMLButtonElement).textContent = t(lang, 'openOptions');

@@ -5,6 +5,8 @@
 body {
   margin: 0;
   width: 320px;
+  max-width: 100vw;
+  overflow-x: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #111827;
   color: #f9fafb;
@@ -71,6 +73,26 @@ button:hover {
 
 .primary-action:hover {
   background: #1d4ed8;
+}
+
+.settings-panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.settings-panel summary {
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.settings-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 12px;
 }
 
 .hint,

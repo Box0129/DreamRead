@@ -652,6 +652,9 @@ function toggleLoop(): void {
     void saveSettings({ loopPlayback: loopEnabled });
   }
   updateLoopButton();
+  if (loopEnabled && finished) {
+    void handlePlay();
+  }
 }
 
 function updateLoopButton(): void {

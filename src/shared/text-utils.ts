@@ -12,42 +12,42 @@ export interface SpeechUnit {
 export const SPEECH_PAUSE = {
   sentence: 550,
   clause: 280,
-  phrase: 150,
+  phrase: 110,
   paragraph: 800,
   none: 0,
 } as const;
 
 type SpeechLang = 'zh-CN' | 'en-US';
 
-const ZH_MAX_CHARS = 12;
-const ZH_MIN_CHARS = 4;
-const EN_MAX_WORDS = 10;
-const EN_MIN_WORDS = 3;
-const MAX_PHRASE_SPLITS = 3;
+const ZH_MAX_CHARS = 42;
+const ZH_MIN_CHARS = 10;
+const EN_MAX_WORDS = 30;
+const EN_MIN_WORDS = 6;
+const MAX_PHRASE_SPLITS = 20;
 
-const ZH_BREAK_AFTER = ['以及', '并且', '但是', '所以', '因为', '如果', '虽然', '而且', '或者', '与', '和'];
-const ZH_BREAK_SINGLE = '的了吗呢吧啊';
+const ZH_BREAK_BEFORE = [
+  '但是',
+  '不过',
+  '所以',
+  '因此',
+  '然后',
+  '同时',
+  '另外',
+  '如果',
+  '虽然',
+  '因为',
+];
+const ZH_BREAK_AFTER = ['的时候', '之后', '以后', '以前', '以来'];
 
 const EN_BREAK_WORDS = new Set([
-  'and',
   'but',
-  'or',
-  'which',
-  'that',
   'because',
-  'when',
-  'if',
   'while',
   'though',
   'although',
-  'with',
-  'for',
-  'from',
-  'after',
-  'before',
-  'until',
-  'since',
-  'as',
+  'however',
+  'therefore',
+  'whereas',
 ]);
 
 const EN_ABBREV = /^(Mr|Mrs|Ms|Dr|Prof|Jr|Sr|St|vs|etc|eg|ie|Inc|Ltd|Co)$/i;
@@ -186,6 +186,15 @@ function splitByPunctuation(text: string): RawSpeechUnit[] {
       continue;
     }
 
+    if (
+      ch === '-' &&
+      /[A-Za-z0-9]/.test(text[i - 1] ?? '') &&
+      /[A-Za-z0-9]/.test(text[i + 1] ?? '')
+    ) {
+      buffer += ch;
+      continue;
+    }
+
     if (isSkippablePunctuation(ch)) {
       continue;
     }
@@ -219,22 +228,26 @@ function isUnitTooLong(text: string, lang: SpeechLang): boolean {
 }
 
 function findChinesePhraseBreak(text: string, start: number, maxEnd: number): number {
+  const minEnd = start + ZH_MIN_CHARS;
   let best = -1;
 
+  for (const token of ZH_BREAK_BEFORE) {
+    let index = text.indexOf(token, minEnd);
+    while (index >= 0 && index <= maxEnd) {
+      best = Math.max(best, index);
+      index = text.indexOf(token, index + token.length);
+    }
+  }
+
   for (const token of ZH_BREAK_AFTER) {
-    const idx = text.indexOf(token, start);
-    if (idx >= 0 && idx + token.length <= maxEnd) {
-      best = Math.max(best, idx + token.length);
+    let index = text.indexOf(token, minEnd);
+    while (index >= 0 && index + token.length <= maxEnd) {
+      best = Math.max(best, index + token.length);
+      index = text.indexOf(token, index + token.length);
     }
   }
 
-  for (let i = start; i < maxEnd; i++) {
-    if (ZH_BREAK_SINGLE.includes(text[i])) {
-      best = Math.max(best, i + 1);
-    }
-  }
-
-  return best > start ? best : -1;
+  return best >= minEnd ? best : -1;
 }
 
 function splitChinesePhrases(text: string, _finalPause: number): string[] {
