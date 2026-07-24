@@ -109,6 +109,18 @@ function runSafely(task: () => Promise<void>): void {
   });
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const parts: string[] = [];
+  const chunkSize = 0x8000;
+
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    parts.push(String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)));
+  }
+
+  return btoa(parts.join(''));
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   setupContextMenu();
 });
@@ -157,10 +169,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
 
-      const blobUrl = URL.createObjectURL(result.data);
+      const audioBase64 = await blobToBase64(result.data);
       sendResponse({
         ok: true,
-        blobUrl,
+        audioBase64,
         mimeType: result.mimeType,
       } satisfies SynthesizeResponse);
     } catch (error) {

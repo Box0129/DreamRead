@@ -54,7 +54,9 @@ const EN_ABBREV = /^(Mr|Mrs|Ms|Dr|Prof|Jr|Sr|St|vs|etc|eg|ie|Inc|Ltd|Co)$/i;
 
 export function normalizeText(text: string): string {
   return text
-    .replace(/\s+/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

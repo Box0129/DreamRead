@@ -3,7 +3,6 @@ import type { DreamReadSettings } from '../tts/types';
 export type MessageType =
   | 'START_READ'
   | 'SYNTHESIZE'
-  | 'PLAY_BLOB'
   | 'GET_SELECTION'
   | 'STOP_READ'
   | 'OPEN_OPTIONS'
@@ -26,17 +25,6 @@ export interface SynthesizeMessage {
   requestId: string;
 }
 
-export interface PlayBlobMessage {
-  type: 'PLAY_BLOB';
-  blobUrl: string;
-  mimeType: string;
-  text: string;
-  settings: DreamReadSettings;
-  requestId: string;
-  fallback?: boolean;
-  error?: string;
-}
-
 export interface GetSelectionMessage {
   type: 'GET_SELECTION';
 }
@@ -52,7 +40,6 @@ export interface OpenOptionsMessage {
 export type ExtensionMessage =
   | StartReadMessage
   | SynthesizeMessage
-  | PlayBlobMessage
   | GetSelectionMessage
   | StopReadMessage
   | OpenOptionsMessage
@@ -60,7 +47,7 @@ export type ExtensionMessage =
 
 export interface SynthesizeResponse {
   ok: boolean;
-  blobUrl?: string;
+  audioBase64?: string;
   mimeType?: string;
   error?: string;
   fallback?: boolean;

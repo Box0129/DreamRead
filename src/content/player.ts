@@ -71,6 +71,7 @@ const THEME_STYLES: Record<
 let host: HTMLElement | null = null;
 let shadow: ShadowRoot | null = null;
 let audio: HTMLAudioElement | null = null;
+let activeBlobUrl: string | null = null;
 let session: PlaybackSession | null = null;
 let currentSettings: DreamReadSettings | null = null;
 let playing = false;
@@ -740,10 +741,15 @@ function cleanupAudio(): void {
     audio.load();
     audio = null;
   }
+  if (activeBlobUrl) {
+    URL.revokeObjectURL(activeBlobUrl);
+    activeBlobUrl = null;
+  }
 }
 
 function attachBlobAudio(url: string, settings: DreamReadSettings): void {
   cleanupAudio();
+  activeBlobUrl = url;
   audio = new Audio(url);
   audio.playbackRate = settings.rate;
   audio.volume = settings.volume;

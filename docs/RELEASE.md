@@ -14,7 +14,7 @@ npm run build
 npm run package
 ```
 
-产物：`release/dreamread-v1.1.0.zip`
+产物：`release/dreamread-v<version>.zip`，其中版本号取自 `package.json`。
 
 > 上传到商店的是 **zip 内直接包含 manifest.json**，而不是 zip 里再套一层 `dist` 文件夹。`npm run package` 已按此规则打包。
 
@@ -48,7 +48,7 @@ npm run package
 ## 3. 提交到 Chrome Web Store
 
 1. 打开 [Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-2. **New Item** → 上传 `release/voicer-v1.0.0.zip`
+2. **New Item** → 上传本次生成的 `release/dreamread-v<version>.zip`
 3. 填写 Store listing（名称、描述、截图、图标）
 4. **Privacy** 标签页：
    - 单一用途：Text-to-speech for selected web content
@@ -75,7 +75,7 @@ npm run package
 
 - **开发者模式加载**：分享源码，用户自行 `npm run build` 后加载 `dist`
 - **离线 CRX**：Chrome 已限制非商店 CRX 安装，不推荐
-- **GitHub Releases**：上传 `voicer-v1.0.0.zip` 供高级用户侧载（需开启开发者模式）
+- **GitHub Releases**：上传 `dreamread-v<version>.zip` 供高级用户侧载（需开启开发者模式）
 
 ## 权限审核说明（供填写表单参考）
 

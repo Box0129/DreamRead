@@ -32,7 +32,7 @@ npm run build
 npm run package
 ```
 
-发布包：`release/dreamread-v1.1.0.zip`
+发布包：`release/dreamread-v<version>.zip`，其中版本号取自 `package.json`。
 
 ## 使用
 

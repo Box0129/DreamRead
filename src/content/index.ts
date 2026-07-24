@@ -9,6 +9,15 @@ import {
   stopAll,
 } from './player';
 
+function base64ToBlobUrl(base64: string, mimeType: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
 async function handleStartRead(message: Extract<ExtensionMessage, { type: 'START_READ' }>): Promise<void> {
   const { settings } = message;
   const text = normalizeInputText(message.text);
@@ -39,11 +48,13 @@ async function handleStartRead(message: Extract<ExtensionMessage, { type: 'START
       return;
     }
 
-    if (!response?.ok || !response.blobUrl) {
+    if (!response?.ok || !response.audioBase64) {
       throw new Error(response?.error || 'Synthesis failed');
     }
 
-    await playBlob(response.blobUrl, response.mimeType || 'audio/wav', settings);
+    const mimeType = response.mimeType || 'audio/wav';
+    const blobUrl = base64ToBlobUrl(response.audioBase64, mimeType);
+    await playBlob(blobUrl, mimeType, settings);
   } catch (error) {
     const settingsNow = await getSettings();
     if (settingsNow.fallbackToWebSpeech) {
