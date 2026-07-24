@@ -2,6 +2,7 @@ import type { DreamReadSettings } from '../tts/types';
 
 export type MessageType =
   | 'START_READ'
+  | 'READ_ACTIVE_SELECTION'
   | 'SYNTHESIZE'
   | 'GET_SELECTION'
   | 'STOP_READ'
@@ -16,6 +17,10 @@ export interface StartReadMessage {
   type: 'START_READ';
   text: string;
   settings: DreamReadSettings;
+}
+
+export interface ReadActiveSelectionMessage {
+  type: 'READ_ACTIVE_SELECTION';
 }
 
 export interface SynthesizeMessage {
@@ -39,6 +44,7 @@ export interface OpenOptionsMessage {
 
 export type ExtensionMessage =
   | StartReadMessage
+  | ReadActiveSelectionMessage
   | SynthesizeMessage
   | GetSelectionMessage
   | StopReadMessage

@@ -509,6 +509,9 @@ export function splitTextIntoChunks(text: string, maxLength = MAX_CHUNK_LENGTH):
 export const i18n = {
   'zh-CN': {
     readThis: '朗读此内容 / Read This',
+    readSelection: '朗读选中内容',
+    readStarted: '已开始朗读',
+    noSelection: '请先在网页中选中文字',
     play: '播放',
     pause: '暂停',
     stop: '停止',
@@ -552,6 +555,9 @@ export const i18n = {
   },
   'en-US': {
     readThis: 'Read This / 朗读此内容',
+    readSelection: 'Read selected text',
+    readStarted: 'Reading started',
+    noSelection: 'Select some text on the page first',
     play: 'Play',
     pause: 'Pause',
     stop: 'Stop',

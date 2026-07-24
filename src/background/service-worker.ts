@@ -90,8 +90,8 @@ async function startReading(tabId: number, text: string): Promise<void> {
   });
 }
 
-async function readSelectionFromTab(tabId: number): Promise<void> {
-  if (!(await isInjectableTab(tabId))) return;
+async function readSelectionFromTab(tabId: number): Promise<boolean> {
+  if (!(await isInjectableTab(tabId))) return false;
 
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
@@ -99,8 +99,9 @@ async function readSelectionFromTab(tabId: number): Promise<void> {
   });
 
   const text = typeof result === 'string' ? result.trim() : '';
-  if (!text) return;
+  if (!text) return false;
   await startReading(tabId, text);
+  return true;
 }
 
 function runSafely(task: () => Promise<void>): void {
@@ -155,6 +156,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'OPEN_OPTIONS') {
     chrome.runtime.openOptionsPage();
     sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message?.type === 'READ_ACTIVE_SELECTION') {
+    void (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const started = tab?.id ? await readSelectionFromTab(tab.id) : false;
+        sendResponse({ ok: started });
+      } catch (error) {
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
     return true;
   }
 

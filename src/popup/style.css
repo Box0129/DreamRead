@@ -58,6 +58,21 @@ button:hover {
   background: rgba(255, 255, 255, 0.12);
 }
 
+.primary-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border-color: transparent;
+  background: #2563eb;
+  font-weight: 600;
+}
+
+.primary-action:hover {
+  background: #1d4ed8;
+}
+
 .hint,
 .status {
   font-size: 11px;
@@ -67,6 +82,11 @@ button:hover {
 
 .status {
   color: #86efac;
+  min-height: 13px;
+}
+
+.status.error {
+  color: #fca5a5;
 }
 
 .actions {

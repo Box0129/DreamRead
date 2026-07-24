@@ -20,6 +20,11 @@ const volumeEl = document.getElementById('volume') as HTMLInputElement;
 const languageEl = document.getElementById('language') as HTMLSelectElement;
 const statusEl = document.getElementById('status') as HTMLParagraphElement;
 
+function showStatus(message: string, isError = false): void {
+  statusEl.textContent = message;
+  statusEl.classList.toggle('error', isError);
+}
+
 function applyLabels(lang: UILanguage): void {
   (document.getElementById('label-engine') as HTMLElement).textContent = t(lang, 'engine');
   (document.getElementById('label-speech-language') as HTMLElement).textContent = t(lang, 'speechLanguage');
@@ -32,6 +37,8 @@ function applyLabels(lang: UILanguage): void {
   (document.getElementById('voiceHint') as HTMLElement).textContent = t(lang, 'voiceNaturalHint');
   (document.getElementById('openOptions') as HTMLButtonElement).textContent = t(lang, 'openOptions');
   (document.getElementById('testVoice') as HTMLButtonElement).textContent = t(lang, 'testVoice');
+  (document.getElementById('readSelectionLabel') as HTMLElement).textContent =
+    t(lang, 'readSelection');
   (document.getElementById('subtitle') as HTMLElement).textContent =
     lang === 'zh-CN' ? '划词朗读' : 'Select text to listen';
   speechLanguageEl.options[0].textContent = t(lang, 'speechAuto');
@@ -78,11 +85,26 @@ async function persist(partial: Partial<DreamReadSettings>): Promise<void> {
   await saveSettings(partial);
   const settings = await getSettings();
   applyLabels(settings.language);
-  statusEl.textContent = t(settings.language, 'saved');
+  showStatus(t(settings.language, 'saved'));
   setTimeout(() => {
-    statusEl.textContent = '';
+    showStatus('');
   }, 1200);
 }
+
+document.getElementById('readSelection')?.addEventListener('click', async () => {
+  const settings = await getSettings();
+  showStatus('');
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'READ_ACTIVE_SELECTION' });
+    showStatus(
+      t(settings.language, response?.ok ? 'readStarted' : 'noSelection'),
+      !response?.ok,
+    );
+    if (response?.ok) window.close();
+  } catch {
+    showStatus(t(settings.language, 'noSelection'), true);
+  }
+});
 
 engineEl.addEventListener('change', () => {
   void persist({ engine: engineEl.value as TTSEngine });
